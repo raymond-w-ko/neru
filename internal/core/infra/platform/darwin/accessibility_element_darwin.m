@@ -436,17 +436,80 @@ static CFStringRef kAXWidgetIdentifierPrefix = CFSTR("widget-local:");
 
 #pragma mark - Click Action Functions
 
+static bool elementOrAncestorMatches(AXUIElementRef element, AXUIElementRef target) {
+	if (!element || !target) {
+		return false;
+	}
+
+	AXUIElementRef current = element;
+	CFRetain(current);
+
+	for (int depth = 0; current && depth < 64; depth++) {
+		if (CFEqual(current, target)) {
+			CFRelease(current);
+			return true;
+		}
+
+		AXUIElementRef parent = NULL;
+		AXError error = AXUIElementCopyAttributeValue(current, kAXParentAttribute, (CFTypeRef *)&parent);
+		CFRelease(current);
+
+		if (error != kAXErrorSuccess || !parent) {
+			return false;
+		}
+
+		current = parent;
+	}
+
+	if (current) {
+		CFRelease(current);
+	}
+
+	return false;
+}
+
+/// Fast visibility check using a pre-computed center point
+/// Skips hidden/visible attribute checks (caller handles those) and position fetch.
+/// Caller should compute center from ElementInfo (already fetched during tree building).
+/// @param element Element reference
+/// @param center Pre-computed center point
+/// @return 1 if the element itself is the hit-test result at the point, or the result is a descendant of the element, 0
+/// otherwise
+int isElementVisibleAtPoint(void *element, CGPoint center) {
+	if (!element)
+		return 0;
+
+	AXUIElementRef axElement = (AXUIElementRef)element;
+
+	AXUIElementRef systemWide = AXUIElementCreateSystemWide();
+	if (!systemWide)
+		return 1;  // Assume visible if system-wide ref cannot be created (mirrors isPointVisible)
+
+	AXUIElementRef hitElement = NULL;
+	AXError error = AXUIElementCopyElementAtPosition(systemWide, center.x, center.y, &hitElement);
+	CFRelease(systemWide);
+
+	if (error != kAXErrorSuccess || !hitElement)
+		return 0;
+
+	bool visible = elementOrAncestorMatches(hitElement, axElement);
+	CFRelease(hitElement);
+
+	return visible ? 1 : 0;
+}
+
 /// Check if element has click action
 /// @param element Element reference
+/// @param skipVisCheck If true, skip the expensive hit-test visibility check
 /// @return 1 if element is clickable, 0 otherwise
-int hasClickAction(void *element) {
+int hasClickAction(void *element, bool skipVisCheck) {
 	if (!element)
 		return 0;
 
 	AXUIElementRef axElement = (AXUIElementRef)element;
 
 	CFTypeRef attrs[] = {
-	    kAXHiddenAttribute, kAXEnabledAttribute, kAXRoleAttribute, kAXFocusableAttribute, kAXIdentifierAttribute};
+	    kAXHiddenAttribute, kAXEnabledAttribute, kAXRoleAttribute, kAXIdentifierAttribute, kAXVisibleAttribute};
 
 	CFArrayRef attrArray = CFArrayCreate(NULL, (const void **)attrs, 5, &kCFTypeArrayCallBacks);
 
@@ -460,9 +523,9 @@ int hasClickAction(void *element) {
 	CFRelease(attrArray);
 
 	bool isHidden = false;
+	bool isVisible = true;  // default visible when attribute not available
 	bool explicitlyDisabled = false;
 	bool hasEnabledAttribute = false;
-	bool isFocusable = false;
 	bool isWidget = false;
 	CFStringRef role = NULL;
 
@@ -493,22 +556,22 @@ int hasClickAction(void *element) {
 				CFRetain(role);
 			}
 
-			// AXFocusable
-			else if (attr == kAXFocusableAttribute && CFGetTypeID(value) == CFBooleanGetTypeID()) {
-				isFocusable = CFBooleanGetValue((CFBooleanRef)value);
-			}
-
 			// AXIdentifier: checks for the `widget-local:` prefix (internal Apple convention,
 			// verified on macOS 14/15) used by all macOS Notification Center and desktop widgets.
 			else if (attr == kAXIdentifierAttribute && CFGetTypeID(value) == CFStringGetTypeID()) {
 				isWidget = CFStringHasPrefix((CFStringRef)value, kAXWidgetIdentifierPrefix);
+			}
+
+			// AXVisible
+			else if (attr == kAXVisibleAttribute && CFGetTypeID(value) == CFBooleanGetTypeID()) {
+				isVisible = CFBooleanGetValue((CFBooleanRef)value);
 			}
 		}
 
 		CFRelease(values);
 	}
 
-	if (isHidden)
+	if (isHidden || !isVisible)
 		return 0;
 
 	// Explicit actions are the strongest signal, so we check for them first
@@ -589,21 +652,17 @@ int hasClickAction(void *element) {
 	if (role)
 		CFRelease(role);
 
-	// Visibility check: compute center+pid for each code path that needs it
+	// Visibility check: hit-test at center to filter obscured/scroll-clipped elements.
+	// Uses parent-walk (isElementVisibleAtPoint) instead of PID check (isPointVisible)
+	// to catch elements covered by sibling views within the same app.
+	// skipVisCheck is set by the Go caller for known problematic system apps
+	// (e.g. PiP windows, screen capture thumbnails) where AX hit-testing is unreliable.
+	if (skipVisCheck)
+		return 1;
+
 	CGPoint center;
-	pid_t pid;
-
-	// For focusable elements, check visibility
-	if (isFocusable) {
-		if (getElementCenter((void *)axElement, &center) && AXUIElementGetPid(axElement, &pid) == kAXErrorSuccess) {
-			return isPointVisible(center, pid) ? 1 : 0;
-		}
-		return 0;
-	}
-
-	// Final check for other elements: visible bounding box and not occluded
-	if (getElementCenter((void *)axElement, &center) && AXUIElementGetPid(axElement, &pid) == kAXErrorSuccess) {
-		return isPointVisible(center, pid) ? 1 : 0;
+	if (getElementCenter((void *)axElement, &center)) {
+		return isElementVisibleAtPoint((void *)axElement, center);
 	}
 
 	return 0;

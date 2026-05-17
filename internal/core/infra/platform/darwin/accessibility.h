@@ -115,8 +115,15 @@ void postMouseMoveEvent(CGPoint position, CGEventType eventType);
 
 /// Check if element has click action
 /// @param element Element reference
+/// @param skipVisCheck If true, skip the expensive hit-test visibility check
 /// @return 1 if element is clickable, 0 otherwise
-int hasClickAction(void *element);
+int hasClickAction(void *element, bool skipVisCheck);
+
+/// Fast visibility check using a pre-computed center point (avoids redundant AX position fetch)
+/// @param element Element reference
+/// @param center Pre-computed center point (from ElementInfo — already fetched during tree building)
+/// @return 1 if element or one of its descendants is hit-test visible at the given point, 0 otherwise
+int isElementVisibleAtPoint(void *element, CGPoint center);
 
 /// Set focus to element
 /// @param element Element reference
@@ -181,6 +188,11 @@ char *getApplicationName(void *app);
 /// @param app Application reference
 /// @return Bundle identifier string
 char *getBundleIdentifier(void *app);
+
+/// Get bundle identifier from PID directly (avoids creating an AX element ref)
+/// @param pid Process identifier
+/// @return Bundle identifier string, or NULL if not found
+char *getBundleIDForPID(int pid);
 
 /// Set application attribute
 /// @param pid Process identifier

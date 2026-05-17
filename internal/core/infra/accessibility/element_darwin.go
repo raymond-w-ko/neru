@@ -667,6 +667,10 @@ func (e *Element) IsClickable(
 		return false
 	}
 
+	// Mission Control state is constant across a single hint scan; hoist
+	// the CGo round-trip to avoid calling it per element in the fast path.
+	missionControlActive := IsMissionControlActive()
+
 	// If info is not provided, try to get it
 	if info == nil {
 		var infoErr error
@@ -693,21 +697,84 @@ func (e *Element) IsClickable(
 	if isRoleAllowed {
 		// Fast path: known-interactive roles (AXButton, AXLink, etc.)
 		// that are enabled don't need the expensive hasClickAction() CGo
-		// call which makes up to 5 AX API round-trips. The isEnabled
-		// flag was already fetched during tree building via getElementInfo.
+		// call which makes up to 5 AX API round-trips. We still verify
+		// actual hit-test visibility so hidden or scroll-clipped elements
+		// cannot get hints just because their role is known.
 		if info != nil && info.IsEnabled() {
 			if _, known := knownInteractiveRoles[element.Role(info.Role())]; known {
-				return true
+				// in mission control, let's skip it for good
+				if missionControlActive {
+					return true
+				}
+
+				// Skip visibility check for known problematic system apps
+				// (e.g. PiP windows, screen capture thumbnails) where AX hit-testing
+				// may incorrectly report elements as obscured.
+				if isExcludedBundleID(info.PID()) {
+					return true
+				}
+
+				center := C.CGPoint{
+					x: C.double(info.Position().X + info.Size().X/2),
+					y: C.double(info.Position().Y + info.Size().Y/2),
+				}
+				return C.isElementVisibleAtPoint(e.ref, center) == 1 //nolint:nlreturn
 			}
 		}
 
 		// Slow path: ambiguous or custom roles need full native verification
-		result := C.hasClickAction(e.ref) //nolint:nlreturn
+		result := C.hasClickAction(e.ref, C.bool(isExcludedBundleID(info.PID()))) //nolint:nlreturn
 
 		return result == 1
 	}
 
 	return false
+}
+
+// pidBundleCache maps PID → bundle identifier to avoid repeated Cocoa lookups.
+// NOTE: PIDs are reused by macOS. The cache intentionally omits negative results
+// (empty bundleID) so that a reused PID is always re-queried rather than
+// inheriting a stale excluded mapping from a previous process.
+var (
+	pidBundleCache    = map[int]string{}
+	pidBundleCacheMu  sync.RWMutex
+	excludedBundleIDs = map[string]struct{}{
+		"com.apple.PIPAgent":             {},
+		"com.apple.screencaptureui":      {},
+		"com.apple.dock":                 {},
+		"com.apple.notificationcenterui": {},
+	}
+)
+
+// isExcludedBundleID checks if the process with the given PID belongs to a
+// bundle ID that should skip the expensive visibility check. Results are
+// cached by PID to avoid redundant Cocoa lookups.
+func isExcludedBundleID(pid int) bool {
+	pidBundleCacheMu.RLock()
+	b, ok := pidBundleCache[pid]
+	pidBundleCacheMu.RUnlock()
+
+	if ok {
+		_, excluded := excludedBundleIDs[b]
+
+		return excluded
+	}
+
+	cBundleID := C.getBundleIDForPID(C.int(pid))
+	if cBundleID == nil {
+		return false
+	}
+
+	bundleID := C.GoString(cBundleID)
+	C.freeString(cBundleID)
+
+	pidBundleCacheMu.Lock()
+	pidBundleCache[pid] = bundleID
+	pidBundleCacheMu.Unlock()
+
+	_, excluded := excludedBundleIDs[bundleID]
+
+	return excluded
 }
 
 // IsMissionControlActive checks if Mission Control is currently active.
