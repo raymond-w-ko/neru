@@ -99,7 +99,9 @@ const (
 	// DefaultParallelThreshold is the default parallel threshold.
 	DefaultParallelThreshold = 20
 	// DefaultMaxParallelDepth is the default max parallel depth.
-	DefaultMaxParallelDepth = 4
+	DefaultMaxParallelDepth = 10
+	// MaxParallelDepthCap is the maximum allowed value for max_parallel_depth.
+	MaxParallelDepthCap = 50
 
 	// DefaultMaxDepth is the default max depth for accessibility tree traversal.
 	DefaultMaxDepth = 50
@@ -286,6 +288,7 @@ func newDefaultConfig() *Config {
 			HintCharacters:    "asdfghjkl",
 			MaxDepth:          DefaultMaxDepth,
 			ParallelThreshold: DefaultParallelThreshold,
+			MaxParallelDepth:  DefaultMaxParallelDepth,
 			Hotkeys: map[string]StringOrStringArray{
 				"Escape":    {"idle"},
 				"/":         {"action search_hints"},
