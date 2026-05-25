@@ -10,13 +10,15 @@ Common issues and solutions for Neru.
 - [Installation & Setup](#installation--setup)
 - [Permissions](#permissions)
 - [Hints & Grids](#hints--grids)
-- [Hotkeys](#hotkeys)
-- [Performance](#performance)
-- [Daemon](#daemon)
-- [App-Specific](#app-specific)
+- [Hotkeys Not Working](#hotkeys-not-working)
+- [Performance Issues](#performance-issues)
+- [Daemon Issues](#daemon-issues)
+- [App-Specific Issues](#app-specific-issues)
 - [Keyboard Layout Issues](#keyboard-layout-issues)
-- [Configuration](#configuration)
-- [Debugging](#debugging)
+- [Configuration Issues](#configuration-issues)
+- [Logging and Debugging](#logging-and-debugging)
+- [Getting Help](#getting-help)
+- [Emergency Reset](#emergency-reset)
 
 ---
 
