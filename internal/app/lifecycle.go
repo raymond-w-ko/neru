@@ -25,6 +25,8 @@ const (
 	MaxExecDisplayLength = 30
 	// SystrayQuitTimeout is the timeout for systray quit.
 	SystrayQuitTimeout = 10 * time.Second
+	// StopTimeout is the timeout for IPC server stop during cleanup.
+	StopTimeout = 5 * time.Second
 	// GCTickerInterval is the interval for garbage collection.
 	GCTickerInterval = 5 * time.Minute
 
@@ -54,7 +56,7 @@ const (
 func (a *App) Run() error {
 	a.logger.Info("Starting Neru")
 
-	err := a.ipcServer.Start(context.Background())
+	err := a.ipcServer.Start(a.ctx)
 	if err != nil {
 		a.logger.Error("Failed to start IPC server", zap.Error(err))
 
@@ -76,7 +78,7 @@ func (a *App) Run() error {
 	cfg := a.configSnapshot()
 
 	if cfg.Grid.EnableGC {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(a.ctx)
 		a.gcCancel = cancel
 
 		go func() {
@@ -274,7 +276,7 @@ func (a *App) processScreenChange() {
 		a.logger.Info("Screen parameters changed; adjusting overlays")
 	}
 
-	ctx := context.Background()
+	ctx := a.ctx
 
 	cfg := a.configSnapshot()
 
@@ -586,6 +588,10 @@ func (a *App) Stop() {
 func (a *App) Cleanup() {
 	a.cleanupOnce.Do(func() {
 		a.logger.Info("Cleaning up")
+		// Cancel root context to signal shutdown to all operations
+		if a.cancel != nil {
+			a.cancel()
+		}
 		// Cancel background GC if running
 		if a.gcCancel != nil {
 			a.gcCancel()
@@ -595,9 +601,17 @@ func (a *App) Cleanup() {
 		// Stop theme observer: nil the handler first so any in-flight KVO callback
 		// (between the async dispatch and actual observer removal) is a no-op.
 		a.stopThemeObserver()
-		// Stop IPC server first to prevent new requests
+		// Stop IPC server first to prevent new requests.
+		// Use a fresh context instead of a.ctx since the root context was
+		// canceled above; a canceled context would cause Stop() to fail
+		// immediately before it can complete graceful teardown.
 		if a.ipcServer != nil {
-			stopServerErr := a.ipcServer.Stop(context.Background())
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), StopTimeout)
+
+			stopServerErr := a.ipcServer.Stop(stopCtx)
+
+			stopCancel()
+
 			if stopServerErr != nil {
 				a.logger.Error("Failed to stop IPC server", zap.Error(stopServerErr))
 			}

@@ -123,6 +123,10 @@ type Handler struct {
 	// Cycle hint state
 	cycleHintIndex int
 
+	// Base context for Handler methods. Injected by the App via NewHandler so
+	// all Handler operations observe app-level cancellation.
+	ctx context.Context //nolint:containedctx
+
 	// heldRepeatingKey tracks which key is currently held for custom repeat.
 	// When non-empty, macOS native key-down events for this key are suppressed
 	// and a custom goroutine drives the repeat at heldRepeatInterval.
@@ -132,6 +136,7 @@ type Handler struct {
 
 // NewHandler creates a new mode handler.
 func NewHandler(
+	ctx context.Context,
 	config *configpkg.Config,
 	logger *zap.Logger,
 	appState *state.AppState,
@@ -176,6 +181,7 @@ func NewHandler(
 	}
 
 	handler := &Handler{
+		ctx:                        ctx,
 		config:                     config,
 		logger:                     logger,
 		appState:                   appState,
@@ -245,7 +251,7 @@ func (h *Handler) RefreshHintsForScreenChange(
 	// Re-read screen bounds under the lock so the onUpdate callback
 	// uses coordinates that match the resized overlay.
 	if h.system != nil {
-		b, err := h.system.ScreenBounds(context.Background())
+		b, err := h.system.ScreenBounds(ctx)
 		if err == nil {
 			h.screenBounds = b
 		} else if !derrors.IsNotSupported(err) {
@@ -374,7 +380,7 @@ func (h *Handler) RefreshRecursiveGridForScreenChange() bool {
 	// Re-read screen bounds under the lock so the overlay uses coordinates
 	// that match the resized window.
 	if h.system != nil {
-		b, err := h.system.ScreenBounds(context.Background())
+		b, err := h.system.ScreenBounds(h.ctx)
 		if err == nil {
 			h.screenBounds = b
 		} else if !derrors.IsNotSupported(err) {
@@ -574,7 +580,7 @@ func (h *Handler) ResetCurrentMode() {
 			}
 
 			err := h.actionService.MoveCursorToPoint(
-				context.Background(),
+				h.ctx,
 				absoluteCenter,
 			)
 			if err != nil {
@@ -624,7 +630,7 @@ func (h *Handler) BackspaceCurrentMode() {
 			}
 
 			err := h.actionService.MoveCursorToPoint(
-				context.Background(),
+				h.ctx,
 				absoluteCenter,
 			)
 			if err != nil {
@@ -769,7 +775,7 @@ func (h *Handler) startHintSearchLocked() error {
 		}
 
 		started, _ := h.textInput.StartHintSearchSession(
-			context.Background(),
+			h.ctx,
 			ports.TextInputCallbacks{
 				OnQueryChanged: func(query string) {
 					h.mu.Lock()
@@ -825,6 +831,8 @@ func (h *Handler) startHintSearchLocked() error {
 
 func (h *Handler) stopHintSearchTextInputLocked(keepEventTapDisabled bool) {
 	if h.hintSearchTextInputActive && h.textInput != nil {
+		// Use Background context since this may be called during cleanup,
+		// after h.ctx has already been canceled.
 		_ = h.textInput.StopHintSearchSession(context.Background())
 	}
 
@@ -842,7 +850,7 @@ func (h *Handler) focusedBundleID() string {
 		return ""
 	}
 
-	bundleID, err := h.actionService.FocusedAppBundleID(context.Background())
+	bundleID, err := h.actionService.FocusedAppBundleID(h.ctx)
 	if err != nil {
 		h.logger.Debug("Failed to get focused app bundle ID for mode hotkeys", zap.Error(err))
 

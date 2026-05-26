@@ -322,6 +322,7 @@ func initializeModeHandler(app *App) {
 	}
 
 	app.modes = modes.NewHandler(
+		app.ctx,
 		deps.config,
 		deps.logger,
 		deps.appState,
@@ -497,8 +498,14 @@ func cleanupUIComponents(app *App) {
 func cleanupEventTapAndIPC(app *App) {
 	// Clean up IPC server
 	if app.ipcServer != nil {
-		// Try to stop the server gracefully
-		stopErr := app.ipcServer.Stop(context.Background())
+		// Try to stop the server gracefully.
+		// Use a fresh context since app.ctx may already be canceled.
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), StopTimeout)
+
+		stopErr := app.ipcServer.Stop(stopCtx)
+
+		stopCancel()
+
 		if stopErr != nil {
 			app.logger.Error("Failed to stop IPC server during cleanup", zap.Error(stopErr))
 		}
