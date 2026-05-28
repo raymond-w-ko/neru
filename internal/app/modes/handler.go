@@ -276,10 +276,17 @@ func (h *Handler) RefreshHintsForScreenChange(
 	// Get current filter options from context
 	filterRoles := h.hints.Context.FilterRoles()
 	filterTextContains := h.hints.Context.FilterTextContains()
+	strategyOverride := h.hints.Context.StrategyOverride()
 
 	// Generate hints with filters preserved; SetHints below performs the
 	// single redraw after active-screen filtering.
-	domainHints, showHintsErr := hintService.GenerateHints(ctx, filterRoles, filterTextContains, "")
+	domainHints, showHintsErr := hintService.GenerateHints(
+		ctx,
+		filterRoles,
+		filterTextContains,
+		"",
+		strategyOverride,
+	)
 	if showHintsErr != nil {
 		h.logger.Error("Failed to refresh hints after screen change", zap.Error(showHintsErr))
 		h.exitModeLocked()
@@ -739,9 +746,17 @@ func (h *Handler) CycleHint(ctx context.Context, backward bool) error {
 		filterRoles := h.hints.Context.FilterRoles()
 		filterTextContains := h.hints.Context.FilterTextContains()
 		startWithSearch := h.hints.Context.StartWithSearch()
+		strategyOverride := h.hints.Context.StrategyOverride()
 
 		h.executeActionAtPoint(pendingAction, center, true, func() {
-			h.activateHintModeInternal(nil, nil, filterRoles, filterTextContains, &startWithSearch)
+			h.activateHintModeInternal(
+				nil,
+				nil,
+				filterRoles,
+				filterTextContains,
+				&startWithSearch,
+				&strategyOverride,
+			)
 
 			// Restore state so subsequent cycles continue to execute the action
 			if h.appState.CurrentMode() == domain.ModeHints &&
@@ -752,6 +767,7 @@ func (h *Handler) CycleHint(ctx context.Context, backward bool) error {
 				h.hints.Context.SetFilterRoles(filterRoles)
 				h.hints.Context.SetFilterTextContains(filterTextContains)
 				h.hints.Context.SetStartWithSearch(startWithSearch)
+				h.hints.Context.SetStrategyOverride(strategyOverride)
 			}
 		})
 	}

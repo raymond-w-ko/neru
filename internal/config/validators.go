@@ -291,6 +291,16 @@ func (c *Config) ValidateHints() error {
 		}
 	}
 
+	switch c.Hints.Strategy {
+	case StrategyAXTree, StrategyVision, "":
+	default:
+		return derrors.Newf(
+			derrors.CodeInvalidConfig,
+			"hints.strategy must be %q or %q",
+			StrategyAXTree, StrategyVision,
+		)
+	}
+
 	return nil
 }
 
@@ -472,7 +482,28 @@ func validateScrollAppConfigs(modeName string, appConfigs []AppConfig) error {
 
 // ValidateAppConfigs validates per-app hint configuration.
 func (c *Config) ValidateAppConfigs() error {
-	return validateAppConfigsWithCallback("hints", c.Hints.AppConfigs, rejectScrollFields("hints"))
+	return validateAppConfigsWithCallback(
+		"hints",
+		c.Hints.AppConfigs,
+		func(idx int, appConfig *AppConfig) error {
+			err := rejectScrollFields("hints")(idx, appConfig)
+			if err != nil {
+				return err
+			}
+
+			switch appConfig.Strategy {
+			case StrategyAXTree, StrategyVision, "":
+			default:
+				return derrors.Newf(
+					derrors.CodeInvalidConfig,
+					"hints.app_configs[%d].strategy must be %q or %q",
+					idx, StrategyAXTree, StrategyVision,
+				)
+			}
+
+			return nil
+		},
+	)
 }
 
 // ValidateGrid validates the grid configuration.
