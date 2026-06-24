@@ -50,6 +50,13 @@ Documentation is progressively disclosed. Start here, then navigate to detailed 
 - [CLI Usage](./docs/CLI.md) - Command-line interface
 - [Configuration](./docs/CONFIGURATION.md) - Configuration reference
 
+## Build Notes
+
+- Windows: run official `just` recipes via Git Bash, not direct `go build`.
+  Use `just --shell C:\opt\Git\bin\sh.exe --shell-arg -cu <recipe>` when
+  native `just` cannot find `sh.exe`; adding `C:\opt\Git\bin` to PATH makes
+  plain `just <recipe>` work.
+
 ## Resources
 
 - [Go](https://golang.org/doc/) | [Just](https://github.com/casey/just) | [Cobra](https://github.com/spf13/cobra)
