@@ -64,6 +64,9 @@ func (n *NoOpManager) Hide() {}
 // Clear is a no-op implementation.
 func (n *NoOpManager) Clear() {}
 
+// ClearCache is a no-op implementation.
+func (n *NoOpManager) ClearCache() {}
+
 // ResizeToActiveScreen is a no-op implementation.
 func (n *NoOpManager) ResizeToActiveScreen() {}
 
@@ -208,6 +211,7 @@ type ManagerInterface interface {
 	Show()
 	Hide()
 	Clear()
+	ClearCache()
 	ResizeToActiveScreen()
 	SwitchTo(next Mode)
 	Subscribe(fn func(StateChange)) uint64

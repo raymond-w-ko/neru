@@ -57,6 +57,7 @@ func (h *Handler) clearAndHideOverlay() {
 	h.stopIndicatorPolling()
 
 	h.overlayManager.Clear()
+	h.overlayManager.ClearCache()
 	h.overlayManager.Hide()
 }
 
@@ -115,6 +116,7 @@ func (h *Handler) performCommonCleanup() {
 	h.stopIndicatorPolling()
 	h.stopHeldRepeatLocked()
 	h.overlayManager.Clear()
+	h.overlayManager.ClearCache()
 
 	// Stop any pending hints refresh timer to prevent re-activation after exit
 	if h.refreshHintsTimer != nil {
