@@ -150,7 +150,7 @@ scroll_step = 100
 "Shift+O" = "__disabled__"
 
 "Ctrl+I" = "idle"
-"y" = "action feed ctrl+f"
+"y" = "action feed ctrl+y"
 
 "Enter" = "action left_click"
 "Shift+Enter" = "action middle_click"
