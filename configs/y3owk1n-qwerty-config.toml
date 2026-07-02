@@ -1,0 +1,166 @@
+# QWERTY translation of y3owk1n's public Neru config.
+#
+# Source:
+# https://github.com/y3owk1n/nix-system-config-v2/blob/main/home-manager/packages/neru.nix
+#
+# This preserves physical key positions from the author's Dvorak-oriented
+# config. Text sent to other applications via `action feed` is left semantic.
+# Shell settings are adapted for Windows so this file validates on this host.
+
+[general]
+hide_overlay_in_screen_share = true
+passthrough_unbounded_keys = true
+exec_shell = 'C:\Windows\System32\cmd.exe'
+exec_shell_args = ["/c"]
+
+[hotkeys]
+"Ctrl+Y" = "recursive_grid --cursor-selection-mode hold"
+"Ctrl+;" = ["action move_mouse --selection", "scroll"]
+
+[hints]
+enabled = false
+visible_check_enabled = false
+
+hint_characters = "adfhjkl;rtyuioxcvbnm,./"
+include_menubar_hints = true
+include_dock_hints = true
+include_nc_hints = true
+include_stage_manager_hints = true
+include_pip_hints = true
+include_screen_capture_hints = true
+detect_mission_control = true
+on_mission_control_activated = "hints --action left_click"
+on_mission_control_deactivated = "idle"
+
+clickable_roles = [
+  "AXButton",
+  "AXComboBox",
+  "AXCheckBox",
+  "AXRadioButton",
+  "AXLink",
+  "AXPopUpButton",
+  "AXTextField",
+  "AXSlider",
+  "AXTabButton",
+  "AXSwitch",
+  "AXDisclosureTriangle",
+  "AXTextArea",
+  "AXMenuItem",
+  "AXCell",
+  "AXRow",
+  "AXMenuButton",
+  "AXGenericElement",
+]
+
+additional_menubar_hints_targets = [
+  "com.apple.TextInputMenuAgent",
+  "com.apple.controlcenter",
+  "com.apple.systemuiserver",
+  "com.y3owk1n.neru",
+  "com.openai.codex",
+  "com.google.antigravity",
+]
+
+[[hints.app_configs]]
+bundle_id = "com.apple.Safari"
+visible_check_enabled = true
+
+[hints.additional_ax_support]
+enable = true
+additional_electron_bundles = [
+  "com.openai.codex",
+  "com.hnc.discord",
+  "com.google.antigravity",
+]
+additional_chromium_bundles = []
+additional_firefox_bundles = []
+additional_webkit_bundles = []
+
+[hints.boundary_highlight]
+enabled = true
+
+[grid]
+enabled = false
+
+[recursive_grid]
+enabled = true
+grid_cols = 5
+grid_rows = 5
+keys = "yuiopasdfghjkl;zxcvbnm,./"
+min_size_width = 1
+min_size_height = 1
+
+[recursive_grid.animation]
+enabled = false
+
+[recursive_grid.ui]
+font_family = "JetBrainsMonoNLNFP-Bold"
+line_width = 1
+highlight_color = "#00000000"
+text_color = "#00000000"
+
+[recursive_grid.hotkeys]
+# disable defaults
+"Shift+P" = "__disabled__"
+"Shift+M" = "__disabled__"
+"Shift+G" = "__disabled__"
+"Shift+F" = "__disabled__"
+"Shift+O" = "__disabled__"
+"`" = "__disabled__"
+
+"Tab" = "toggle-cursor-follow-selection"
+
+"q" = "action move_mouse"
+"w" = "action move_mouse --center"
+"e" = "action reset"
+"r" = "action mouse_down"
+"t" = "action mouse_up"
+"Enter" = "action left_click"
+"Shift+Enter" = "action middle_click"
+"Ctrl+Enter" = "action right_click"
+"Space" = "action left_click"
+"Shift+Space" = "action middle_click"
+"Ctrl+Space" = "action right_click"
+
+"Ctrl+I" = "idle"
+"Ctrl+C" = "action scroll_down"
+"Ctrl+V" = "action scroll_up"
+"Ctrl+J" = "action scroll_left"
+"Ctrl+P" = "action scroll_right"
+
+# [[recursive_grid.app_configs]]
+# bundle_id = "com.brave.Browser"
+# hotkeys = {
+#   "1" = ["action right_click", "action sleep 0.1", "action feed o p e n enter m d a enter"],
+#   "2" = ["action right_click", "action sleep 0.1", "action feed o p e n enter s k b enter"],
+#   "3" = ["action right_click", "action sleep 0.1", "action feed o p e n enter t r a enter"],
+#   "4" = ["action right_click", "action sleep 0.1", "action feed o p e n enter m a d enter"],
+#   "5" = ["action right_click", "action sleep 0.1", "action feed o p e n enter w a k enter"],
+# }
+
+[scroll]
+scroll_step = 100
+
+[scroll.hotkeys]
+# disable defaults
+"Shift+P" = "__disabled__"
+"Shift+M" = "__disabled__"
+"Shift+G" = "__disabled__"
+"Shift+F" = "__disabled__"
+"Shift+O" = "__disabled__"
+
+"Ctrl+I" = "idle"
+"y" = "action feed ctrl+f"
+
+"Enter" = "action left_click"
+"Shift+Enter" = "action middle_click"
+"Ctrl+Enter" = "action right_click"
+"Space" = "action left_click"
+"Shift+Space" = "action middle_click"
+"Ctrl+Space" = "action right_click"
+
+[mouse_action_indicator]
+enabled = true
+
+[mode_indicator.ui]
+font_family = "JetBrainsMonoNLNFP-Bold"
