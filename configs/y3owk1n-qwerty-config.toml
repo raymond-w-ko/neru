@@ -122,11 +122,11 @@ text_color = "#00000000"
 "Shift+Space" = "action middle_click"
 "Ctrl+Space" = "action right_click"
 
-"Ctrl+I" = "idle"
-"Ctrl+C" = "action scroll_down"
-"Ctrl+V" = "action scroll_up"
-"Ctrl+J" = "action scroll_left"
-"Ctrl+P" = "action scroll_right"
+"Ctrl+C" = "idle"
+"Ctrl+J" = "action scroll_down"
+"Ctrl+K" = "action scroll_up"
+"Ctrl+H" = "action scroll_left"
+"Ctrl+L" = "action scroll_right"
 
 # [[recursive_grid.app_configs]]
 # bundle_id = "com.brave.Browser"
@@ -149,7 +149,7 @@ scroll_step = 100
 "Shift+F" = "__disabled__"
 "Shift+O" = "__disabled__"
 
-"Ctrl+I" = "idle"
+"Ctrl+C" = "idle"
 "y" = "action feed ctrl+y"
 
 "Enter" = "action left_click"
