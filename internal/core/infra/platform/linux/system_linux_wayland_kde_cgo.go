@@ -199,3 +199,25 @@ func libeiKey(keycode int, pressed bool) error {
 
 	return nil
 }
+
+// libeiHasKeyboard reports whether the granted libei session includes a keyboard
+// device. The portal often grants only pointer + absolute-pointer capability,
+// so this check lets callers fail fast with a clear message rather than
+// discovering the absence mid-sequence.
+//
+// It uses TryLock so that `action feed` never blocks behind the portal warm-up
+// lock (held up to 120 s). If the lock is busy, busy is true and the caller
+// should return a retriable error instead of a permanent unsupported result.
+func libeiHasKeyboard() (bool, bool) {
+	if !globalLibeiState.mu.TryLock() {
+		return false, true
+	}
+
+	defer globalLibeiState.mu.Unlock()
+
+	if !globalLibeiState.ready {
+		return false, false
+	}
+
+	return C.neru_ei_has_keyboard(globalLibeiState.client) != 0, false //nolint:nlreturn
+}
