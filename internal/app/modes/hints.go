@@ -203,12 +203,11 @@ func (h *Handler) activateHintModeInternal(
 	actionString := domain.ActionString(actionEnum)
 
 	if isRefresh {
-		// During refresh, only clear overlay and stop polling but do NOT change mode
-		// or disable event tap. Mode and event tap are already in the correct state,
-		// so SetModeHints() can be skipped on the success path.
-		// This prevents leaving the app in idle mode with event tap disabled if hint
-		// generation fails.
-		h.overlayManager.Clear()
+		// Keep the mode, event tap, and overlay in place for an in-place refresh, so
+		// the existing labels stay visible until the fresh scan draws the new set over
+		// them. Only indicator polling stops. Skipping SetModeHints on the success path
+		// avoids leaving the app idle with the event tap disabled if hint generation
+		// fails.
 		h.stopIndicatorPolling()
 	} else {
 		h.exitModeLocked()
@@ -238,9 +237,13 @@ func (h *Handler) activateHintModeInternal(
 	}
 
 	h.screenBounds = activeScreenBounds
-	// Clear any previous overlay content (e.g., scroll highlights) before drawing hints.
-	// This prevents scroll highlights from persisting when switching from scroll mode to hints mode.
-	h.overlayManager.Clear()
+	// On a fresh activation, clear leftover overlay content (e.g. scroll highlights)
+	// before drawing hints. A refresh keeps its overlay so the existing labels persist
+	// until the redraw draws the new set over them.
+	if !isRefresh {
+		h.overlayManager.Clear()
+	}
+
 	h.appState.SetHintOverlayNeedsRefresh(false)
 
 	if h.hints != nil && h.hints.Context != nil {
@@ -349,6 +352,12 @@ func (h *Handler) activateHintModeInternal(
 		strategyVal,
 	)
 	if !permissionOk {
+		// On a refresh, exit through exitModeLocked so the stale overlay is cleared,
+		// matching the other refresh abort paths.
+		if isRefresh {
+			h.exitModeLocked()
+		}
+
 		return
 	}
 
