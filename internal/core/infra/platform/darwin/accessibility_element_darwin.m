@@ -97,6 +97,135 @@ void *NeruGetApplicationByBundleId(const char *bundle_id) {
 	}
 }
 
+/// Detect the application type of an app bundle by inspecting engine-specific
+/// resource files and Info.plist keys, avoiding hardcoded app/framework name
+/// lists.
+///
+/// Detection strategy (all file-based, zero keywords):
+///   1. Electron Framework.framework                      -> electron
+///   2. app_mode_loader in a framework's Helpers/         -> chromium
+///   3. CrAppModeShortcutIDKey (Chrome PWA app shim)      -> chromium
+///   4. XUL engine + Contents/Resources/browser/          -> firefox
+///   5. LSTemplateApplication=1 (Safari PWA)              -> webkit
+///   6. http/https URL scheme registration                -> webkit
+///
+/// @param bundle_id Bundle identifier
+/// @return "electron", "chromium", "firefox", "webkit", or NULL if unknown
+char *NeruDetectBundleType(const char *bundle_id) {
+	if (!bundle_id)
+		return NULL;
+
+	@autoreleasepool {
+		NSString *bundleIdStr = [NSString stringWithUTF8String:bundle_id];
+
+		// Find the app bundle on disk: try LaunchServices (installed apps) first,
+		// then NSRunningApplication (running apps that may not be in LS database,
+		// e.g. Chromium PWA app shims with UUID-suffixed bundle IDs).
+		NSURL *bundleURL = nil;
+		CFArrayRef appURLs = LSCopyApplicationURLsForBundleIdentifier((__bridge CFStringRef)bundleIdStr, NULL);
+		if (appURLs) {
+			CFIndex count = CFArrayGetCount(appURLs);
+			if (count > 0) {
+				bundleURL = (__bridge NSURL *)CFArrayGetValueAtIndex(appURLs, 0);
+			}
+			CFRelease(appURLs);
+		}
+
+		if (!bundleURL) {
+			NSArray *running = [NSRunningApplication runningApplicationsWithBundleIdentifier:bundleIdStr];
+			if (running.count > 0) {
+				bundleURL = [running.firstObject bundleURL];
+			}
+		}
+
+		if (!bundleURL)
+			return NULL;
+
+		NSString *bundlePath = [bundleURL path];
+		NSFileManager *fm = [NSFileManager defaultManager];
+
+		// 1. Electron Framework.framework is the definitive Electron marker
+		NSString *frameworksPath = [bundlePath stringByAppendingPathComponent:@"Contents/Frameworks"];
+		if ([fm fileExistsAtPath:[frameworksPath stringByAppendingPathComponent:@"Electron Framework.framework"]])
+			return strdup("electron");
+
+		// 2. app_mode_loader inside a framework's Helpers/ marks a Chromium-based browser
+		//    (Chrome, Edge, Brave, Vivaldi, Opera, Arc, etc.). Unlike icudtl.dat it is absent
+		//    from Electron/CEF/Qt runtimes, so non-browser Chromium apps are not matched.
+		//    Some browsers (e.g. ChatGPT Atlas) nest the real browser under
+		//    Contents/Support/<App>.app, so scan those Frameworks directories too.
+		NSString *supportPath = [bundlePath stringByAppendingPathComponent:@"Contents/Support"];
+		NSMutableArray *frameworksDirs = [NSMutableArray arrayWithObject:frameworksPath];
+		for (NSString *sub in [fm contentsOfDirectoryAtPath:supportPath error:nil]) {
+			if ([sub hasSuffix:@".app"])
+				[frameworksDirs addObject:[[supportPath stringByAppendingPathComponent:sub]
+				                              stringByAppendingPathComponent:@"Contents/Frameworks"]];
+		}
+		for (NSString *frameworksDir in frameworksDirs) {
+			NSArray *fwItems = [fm contentsOfDirectoryAtPath:frameworksDir error:nil];
+			for (NSString *item in fwItems) {
+				if (![item hasSuffix:@".framework"])
+					continue;
+				NSString *fwPath = [frameworksDir stringByAppendingPathComponent:item];
+				NSString *loaderPath = [fwPath stringByAppendingPathComponent:@"Helpers/app_mode_loader"];
+				if ([fm fileExistsAtPath:loaderPath])
+					return strdup("chromium");
+			}
+		}
+
+		// 3. Any CrAppMode* key identifies Chrome/Chromium PWA app shims.
+		//    These are thin bundles that load the Chromium framework dynamically
+		//    from the parent browser installation (no icudtl.dat locally).
+		//    Common keys: CrAppModeShortcutID, CrAppModeShortcutURL,
+		//    CrAppModeShortcutName, CrAppModeBrowserBundleID, etc.
+		NSString *plistPath = [bundlePath stringByAppendingPathComponent:@"Contents/Info.plist"];
+		NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:plistPath];
+		if (info) {
+			for (NSString *key in info) {
+				if ([key hasPrefix:@"CrAppMode"]) {
+					return strdup("chromium");
+				}
+			}
+		}
+
+		// 4. XUL (the Gecko engine binary) plus a Contents/Resources/browser component marks a
+		//    Firefox-based browser (Firefox, LibreWolf, Waterfox, Floorp, Zen, Mullvad/Tor Browser,
+		//    Pale Moon, etc.). The browser directory separates a Gecko browser from Gecko non-browsers
+		//    like Thunderbird (mail) or SeaMonkey (suite), which ship XUL but no browser component.
+		//    Firefox's bundle layout is flat and unbranded, so these are fixed paths (no scan needed).
+		NSString *xulPath = [bundlePath stringByAppendingPathComponent:@"Contents/MacOS/XUL"];
+		NSString *browserPath = [bundlePath stringByAppendingPathComponent:@"Contents/Resources/browser"];
+		BOOL browserIsDir = NO;
+		BOOL hasBrowserDir = [fm fileExistsAtPath:browserPath isDirectory:&browserIsDir] && browserIsDir;
+		if ([fm fileExistsAtPath:xulPath] && hasBrowserDir)
+			return strdup("firefox");
+
+		// 5. LSTemplateApplication marks Safari web apps (Add to Dock PWAs).
+		//    These use system WebKit and register "x-webkit-app-launch", not http.
+		if ([info[@"LSTemplateApplication"] boolValue])
+			return strdup("webkit");
+
+		// 6. http/https URL scheme registration — only web browsers register these.
+		//    Non-browser apps (TextEdit, Terminal, IDEs, etc.) never do.
+		NSArray *urlTypes = info[@"CFBundleURLTypes"];
+		if (urlTypes) {
+			for (NSDictionary *urlType in urlTypes) {
+				NSArray *schemes = urlType[@"CFBundleURLSchemes"];
+				if (!schemes)
+					continue;
+				for (NSString *scheme in schemes) {
+					if ([[scheme lowercaseString] isEqualToString:@"http"] ||
+					    [[scheme lowercaseString] isEqualToString:@"https"]) {
+						return strdup("webkit");
+					}
+				}
+			}
+		}
+
+		return NULL;
+	}
+}
+
 #pragma mark - Element Information Functions
 
 static bool shouldPrefetchActions(const char *role) {

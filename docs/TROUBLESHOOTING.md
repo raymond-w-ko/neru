@@ -139,35 +139,25 @@ A tiling window manager with focus-follows-mouse avoids this at the source.
 log_level = "debug"
 ```
 
-### Hints don't appear in Electron apps or Chrome/Firefox content
+### Hints not showing in browsers (Chrome, Firefox, Safari, Brave, Edge, Electron apps)
 
-**Browsers and Electron apps needs additional AX support.**
+**Browser engine detection is fully automatic.** Neru identifies the rendering engine (Chromium, Firefox, WebKit, Electron) by inspecting the app bundle — no manual configuration needed.
 
-**Solution:**
-
-Edit `~/.config/neru/config.toml`:
-
-```toml
-[hints.additional_ax_support]
-enable = true
-
-# If your app isn't auto-detected, add it to the matching list:
-additional_electron_bundles = [
-    "com.your.electronapp",
-]
-additional_chromium_bundles = [
-    "com.your.chromiumapp",
-]
-additional_firefox_bundles = [
-    "com.your.firefoxapp",
-]
-```
-
-Restart Neru:
+If hints aren't showing in a browser or Electron app, the automatic detection likely missed it. Check the logs for the detection result:
 
 ```bash
-pkill neru && neru launch
+grep "Detected non empty bundle type" ~/Library/Logs/neru/app.log
 ```
+
+If your browser doesn't appear in the logs at all, the detection returned empty — open an issue at [github.com/y3owk1n/neru](https://github.com/y3owk1n/neru) with the bundle ID.
+
+Find the bundle ID:
+```bash
+osascript -e 'id of app "Your Browser"'
+```
+
+> [!NOTE]
+> PWAs (installed web apps) are also detected automatically — Chrome PWAs as `chromium`, Safari PWAs as `webkit`.
 
 ### Some elements that should have hints don't have hints
 
@@ -463,18 +453,6 @@ pkill -9 neru
 
 ## App-Specific Issues
 
-### VS Code: Hints don't appear in editor
-
-**Electron AX support needed.**
-
-**Solution:**
-
-```toml
-[hints.additional_ax_support]
-enable = true
-# VS Code is auto-detected
-```
-
 ### Adobe apps: Hints misaligned or missing
 
 **Adobe apps may need custom roles.**
@@ -662,6 +640,8 @@ grep "com.apple.Safari" ~/Library/Logs/neru/app.log
 ```
 
 ### Common log messages
+
+**"Found usable accessibility tree"** - Accessibility tree detected, AX support activated
 
 **"Hints mode activated"** - Hint overlay is active; includes hint count when available
 

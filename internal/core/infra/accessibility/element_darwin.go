@@ -815,3 +815,37 @@ func IsMissionControlActive() bool {
 
 	return bool(result)
 }
+
+var (
+	detectBundleMu    sync.RWMutex
+	detectBundleCache = map[string]string{}
+)
+
+// DetectBundleType inspects the app bundle for a given bundle ID and returns
+// the application type: "electron", "chromium", "firefox", "webkit", or "".
+// Results are cached per bundle ID since bundle contents do not change for a
+// running app.
+func DetectBundleType(bundleID string) string {
+	detectBundleMu.RLock()
+	cached, ok := detectBundleCache[bundleID]
+	detectBundleMu.RUnlock()
+	if ok {
+		return cached
+	}
+
+	cBundleID := C.CString(bundleID)
+	defer C.free(unsafe.Pointer(cBundleID)) //nolint:nlreturn
+
+	result := C.NeruDetectBundleType(cBundleID)
+	typ := ""
+	if result != nil {
+		typ = C.GoString(result)
+		C.NeruFreeString(result)
+	}
+
+	detectBundleMu.Lock()
+	detectBundleCache[bundleID] = typ
+	detectBundleMu.Unlock()
+
+	return typ
+}
